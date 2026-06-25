@@ -187,6 +187,17 @@
     font-family:'Cairo'; padding:8px; cursor:pointer; font-size:0.85rem;
   }
 
+  /* ---------- Modal form fields (add member, etc.) ---------- */
+  .modal-field{margin-bottom:14px;}
+  .modal-field label{display:block; font-size:0.78rem; color:var(--paper-dim); margin-bottom:6px;}
+  .modal-field input, .modal-field select{
+    width:100%; background:var(--ink); border:1px solid var(--line); color:var(--paper);
+    border-radius:10px; padding:11px 14px; font-family:'Cairo'; font-size:0.92rem;
+  }
+  .modal-field input:focus, .modal-field select:focus{outline:2px solid var(--gold); outline-offset:1px;}
+  .modal-btn-row{display:flex; gap:10px; margin-top:18px;}
+  .modal-btn-row .btn{flex:1; text-align:center; padding:12px;}
+
   /* ---------- Maestro lock screen ---------- */
   .lock-screen{
     max-width:380px; margin:60px auto; padding:32px 26px; text-align:center;
@@ -932,10 +943,8 @@ function renderRosterEditor(){
     wrap.innerHTML = `<div class="empty"><span class="glyph">➕</span>لسه مفيش أعضاء. اضغط "إضافة عضو" تحت.</div>`;
     return;
   }
-  wrap.innerHTML = state.members.map(m=>{
-    const last = getLastStatusDates(m.id);
-    return `
-    <div class="roster-row" data-row-id="${m.id}" style="flex-wrap:wrap; align-items:flex-start;">
+  wrap.innerHTML = state.members.map(m=>`
+    <div class="roster-row" data-row-id="${m.id}">
       <input type="text" value="${m.name}" data-field="name" placeholder="الاسم">
       <select data-field="section">
         <option value="موسيقي" ${m.section==='موسيقي'?'selected':''}>موسيقي</option>
@@ -943,14 +952,8 @@ function renderRosterEditor(){
       </select>
       <select data-field="sub"></select>
       <button class="icon-btn" data-action="delete" title="حذف">✕</button>
-      <div style="flex:0 0 100%; display:flex; gap:14px; padding:6px 2px 2px; font-size:0.72rem; color:var(--paper-dim);">
-        <span>آخر حضور: <b style="color:${last['حاضر'] ? 'var(--ok)' : 'var(--paper-dim)'};">${last['حاضر'] ? formatDateShort(last['حاضر']) : '—'}</b></span>
-        <span>آخر تأخير: <b style="color:${last['متأخر'] ? 'var(--gold)' : 'var(--paper-dim)'};">${last['متأخر'] ? formatDateShort(last['متأخر']) : '—'}</b></span>
-        <span>آخر غياب: <b style="color:${last['غائب'] ? 'var(--bad)' : 'var(--paper-dim)'};">${last['غائب'] ? formatDateShort(last['غائب']) : '—'}</b></span>
-      </div>
     </div>
-  `;
-  }).join('');
+  `).join('');
 
   // populate sub-selects according to current section
   wrap.querySelectorAll('.roster-row').forEach(row=>{
@@ -1104,13 +1107,75 @@ function bindStaticEvents(){
   });
   document.getElementById('exportCsv').onclick = exportCsv;
 
-  document.getElementById('addMemberBtn').onclick = ()=>{
-    state.members.push({ id: uid(), name: 'عضو جديد', section: 'كورال', sub: VOICE_PARTS[0] });
+  document.getElementById('addMemberBtn').onclick = openAddMemberModal;
+}
+
+function openAddMemberModal(){
+  const root = document.getElementById('modalRoot');
+  root.innerHTML = `
+    <div class="modal-overlay" id="overlay">
+      <div class="modal">
+        <h3>إضافة عضو جديد</h3>
+        <div class="sub">اكتب بيانات العضو وحدد قسمه</div>
+        <div class="modal-field">
+          <label>الاسم</label>
+          <input type="text" id="newMemberName" placeholder="اسم العضو" autocomplete="off">
+        </div>
+        <div class="modal-field">
+          <label>القسم</label>
+          <select id="newMemberSection">
+            <option value="كورال">كورال</option>
+            <option value="موسيقي">موسيقي</option>
+          </select>
+        </div>
+        <div class="modal-field">
+          <label>الفرع</label>
+          <select id="newMemberSub"></select>
+        </div>
+        <div class="modal-btn-row">
+          <button class="btn btn-ghost" id="cancelAddMember">إلغاء</button>
+          <button class="btn btn-primary" id="confirmAddMember">إضافة</button>
+        </div>
+      </div>
+    </div>
+  `;
+  const sectionSelect = document.getElementById('newMemberSection');
+  const subSelect = document.getElementById('newMemberSub');
+  fillSubOptions(subSelect, sectionSelect.value, VOICE_PARTS[0]);
+
+  sectionSelect.addEventListener('change', ()=>{
+    const defaultSub = sectionSelect.value === 'موسيقي' ? DEFAULT_INSTRUMENTS[0] : VOICE_PARTS[0];
+    fillSubOptions(subSelect, sectionSelect.value, defaultSub);
+  });
+
+  document.getElementById('cancelAddMember').onclick = ()=> root.innerHTML = '';
+  document.getElementById('overlay').addEventListener('click', (e)=>{ if(e.target.id === 'overlay') root.innerHTML=''; });
+
+  document.getElementById('confirmAddMember').onclick = ()=>{
+    const name = document.getElementById('newMemberName').value.trim();
+    if(!name){
+      showToast('لازم تكتب اسم العضو الأول');
+      document.getElementById('newMemberName').focus();
+      return;
+    }
+    state.members.push({
+      id: uid(),
+      name,
+      section: sectionSelect.value,
+      sub: subSelect.value
+    });
     queueSave();
-    renderRosterEditor();
+    root.innerHTML = '';
     renderMaestroAll();
     renderMemberGrid();
+    showToast(`تمت إضافة ${name}`);
   };
+
+  setTimeout(()=> document.getElementById('newMemberName').focus(), 50);
+
+  document.getElementById('newMemberName').addEventListener('keydown', (e)=>{
+    if(e.key === 'Enter') document.getElementById('confirmAddMember').click();
+  });
 }
 
 /* ============================================================
