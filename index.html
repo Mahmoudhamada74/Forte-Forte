@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>كورال فورتي — الحضور والغياب</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Markazi+Text:wght@500;600;700&family=Cairo:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+<style>
+  :root{
+    --ink: #0c1320;
+    --ink-2: #131b2c;
+    --ink-3: #1b2438;
+    --paper: #f6f1e7;
+    --paper-dim: #d9d2c1;
+    --garnet: #9a2b3c;
+    --garnet-bright: #c43a4f;
+    --gold: #c9a24b;
+    --line: rgba(246,241,231,0.14);
+    --line-soft: rgba(246,241,231,0.07);
+    --ok: #5d9c6c;
+    --warn: #c9a24b;
+    --bad: #b14a4a;
+    --radius: 14px;
+    --shadow: 0 20px 50px -20px rgba(0,0,0,0.6);
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:
+      repeating-linear-gradient(180deg, transparent 0 38px, var(--line-soft) 38px 39px, transparent 39px 116px),
+      radial-gradient(1200px 800px at 80% -10%, #1a2236 0%, transparent 60%),
+      linear-gradient(180deg, var(--ink) 0%, var(--ink-2) 100%);
+    color: var(--paper);
+    font-family:'Cairo', sans-serif;
+    min-height:100vh;
+    -webkit-font-smoothing:antialiased;
+  }
+  .display{font-family:'Markazi Text', serif;}
+  .mono{font-family:'IBM Plex Mono', monospace; letter-spacing:0.02em;}
+
+  /* ---------- Top bar ---------- */
+  .topbar{
+    position:sticky; top:0; z-index:40;
+    backdrop-filter: blur(10px);
+    background: rgba(12,19,32,0.78);
+    border-bottom:1px solid var(--line);
+  }
+  .topbar-inner{
+    max-width:1100px; margin:0 auto; padding:14px 20px;
+    display:flex; align-items:center; justify-content:space-between; gap:16px;
+  }
+  .brand{display:flex; align-items:center; gap:12px;}
+  .clef{
+    width:34px; height:34px; flex:none; color:var(--gold);
+  }
+  .brand-text h1{
+    font-size:1.05rem; margin:0; font-weight:700; letter-spacing:0.01em;
+  }
+  .brand-text span{
+    display:block; font-size:0.68rem; color:var(--paper-dim); margin-top:1px; letter-spacing:0.12em;
+  }
+  .role-switch{
+    display:flex; background:var(--ink-3); border-radius:999px; padding:4px; border:1px solid var(--line);
+  }
+  .role-switch button{
+    border:none; background:transparent; color:var(--paper-dim);
+    padding:8px 16px; border-radius:999px; font-family:'Cairo'; font-weight:600; font-size:0.82rem;
+    cursor:pointer; transition:.25s;
+  }
+  .role-switch button.active{
+    background:var(--garnet); color:var(--paper); box-shadow: 0 4px 14px -4px rgba(154,43,60,0.7);
+  }
+
+  .wrap{max-width:1100px; margin:0 auto; padding:28px 20px 80px;}
+
+  /* ---------- Loading / empty states ---------- */
+  .skeleton{
+    height:14px; border-radius:6px; background:linear-gradient(90deg, var(--ink-3) 25%, #232d44 37%, var(--ink-3) 63%);
+    background-size:400% 100%; animation:shimmer 1.4s infinite;
+  }
+  @keyframes shimmer{0%{background-position:100% 0}100%{background-position:0 0}}
+
+  .empty{
+    text-align:center; padding:50px 20px; color:var(--paper-dim);
+    border:1px dashed var(--line); border-radius:var(--radius);
+  }
+  .empty .glyph{font-size:2.2rem; color:var(--gold); margin-bottom:10px; display:block;}
+
+  /* ---------- Cards ---------- */
+  .card{
+    background: linear-gradient(180deg, var(--ink-3), var(--ink-2));
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    box-shadow:var(--shadow);
+  }
+  .section-title{
+    display:flex; align-items:baseline; gap:10px; margin:0 0 16px;
+  }
+  .section-title .num{
+    font-family:'IBM Plex Mono'; color:var(--gold); font-size:0.85rem;
+  }
+  .section-title h2{
+    font-size:1.15rem; margin:0; font-weight:700;
+  }
+  .section-title .rule{flex:1; height:1px; background:var(--line);}
+
+  /* ---------- Member picker (member view) ---------- */
+  .picker-card{padding:26px 22px; margin-bottom:20px;}
+  .session-meta{
+    display:flex; flex-wrap:wrap; gap:10px; margin-bottom:22px;
+  }
+  .pill{
+    border:1px solid var(--line); border-radius:999px; padding:8px 14px;
+    font-size:0.8rem; color:var(--paper-dim); display:flex; align-items:center; gap:6px;
+  }
+  .pill b{color:var(--paper); font-weight:600;}
+
+  .search-row{display:flex; gap:10px; margin-bottom:18px;}
+  .search-row input{
+    flex:1; background:var(--ink); border:1px solid var(--line); color:var(--paper);
+    border-radius:10px; padding:12px 14px; font-family:'Cairo'; font-size:0.95rem;
+  }
+  .search-row input::placeholder{color:var(--paper-dim);}
+  .search-row input:focus{outline:2px solid var(--gold); outline-offset:1px;}
+
+  .group-tabs{display:flex; gap:8px; margin-bottom:18px; flex-wrap:wrap;}
+  .group-tabs button{
+    border:1px solid var(--line); background:transparent; color:var(--paper-dim);
+    padding:7px 14px; border-radius:999px; font-family:'Cairo'; font-size:0.8rem; cursor:pointer; transition:.2s;
+  }
+  .group-tabs button.active{background:var(--gold); color:var(--ink); border-color:var(--gold); font-weight:700;}
+
+  .member-grid{
+    display:grid; grid-template-columns:repeat(auto-fill, minmax(150px,1fr)); gap:10px;
+  }
+  .member-btn{
+    border:1px solid var(--line); background:var(--ink); color:var(--paper);
+    padding:14px 12px; border-radius:10px; cursor:pointer; text-align:right;
+    font-family:'Cairo'; font-size:0.92rem; font-weight:600; transition:.18s;
+    display:flex; flex-direction:column; gap:4px;
+  }
+  .member-btn .grp{font-size:0.68rem; color:var(--paper-dim); font-weight:500;}
+  .member-btn:hover{border-color:var(--gold); transform:translateY(-1px);}
+  .member-btn:focus-visible{outline:2px solid var(--gold); outline-offset:2px;}
+  .member-btn.marked{border-color:var(--ok); background:rgba(93,156,108,0.12);}
+  .member-btn.marked .grp{color:var(--ok);}
+
+  /* ---------- Status modal ---------- */
+  .modal-overlay{
+    position:fixed; inset:0; background:rgba(8,11,18,0.72); backdrop-filter: blur(4px);
+    display:flex; align-items:center; justify-content:center; z-index:100; padding:20px;
+  }
+  .modal{
+    background:linear-gradient(180deg, var(--ink-3), var(--ink-2));
+    border:1px solid var(--line); border-radius:18px; padding:28px 24px;
+    width:100%; max-width:380px; box-shadow:0 30px 70px -20px rgba(0,0,0,0.7);
+  }
+  .modal h3{margin:0 0 4px; font-size:1.1rem;}
+  .modal .sub{color:var(--paper-dim); font-size:0.82rem; margin-bottom:20px;}
+  .status-options{display:flex; flex-direction:column; gap:10px;}
+  .status-btn{
+    border:1px solid var(--line); background:var(--ink); color:var(--paper);
+    padding:14px 16px; border-radius:12px; font-family:'Cairo'; font-weight:700; font-size:0.95rem;
+    cursor:pointer; display:flex; align-items:center; gap:10px; transition:.18s;
+  }
+  .status-btn:hover{transform:translateY(-1px);}
+  .status-btn .dot{width:10px; height:10px; border-radius:50%; flex:none;}
+  .status-btn[data-status="حاضر"]:hover{border-color:var(--ok);}
+  .status-btn[data-status="حاضر"] .dot{background:var(--ok);}
+  .status-btn[data-status="متأخر"]:hover{border-color:var(--warn);}
+  .status-btn[data-status="متأخر"] .dot{background:var(--warn);}
+  .status-btn[data-status="غائب"]:hover{border-color:var(--bad);}
+  .status-btn[data-status="غائب"] .dot{background:var(--bad);}
+  .modal-cancel{
+    margin-top:16px; width:100%; background:transparent; border:none; color:var(--paper-dim);
+    font-family:'Cairo'; padding:8px; cursor:pointer; font-size:0.85rem;
+  }
+  .toast{
+    position:fixed; bottom:28px; left:50%; transform:translateX(-50%);
+    background:var(--garnet); color:var(--paper); padding:12px 22px; border-radius:999px;
+    font-weight:700; font-size:0.88rem; z-index:200; box-shadow:0 12px 30px -8px rgba(154,43,60,0.7);
+    animation: toastIn .25s ease-out;
+  }
+  @keyframes toastIn{from{opacity:0; transform:translate(-50%,10px)} to{opacity:1; transform:translate(-50%,0)}}
+
+  /* ---------- Maestro dashboard ---------- */
+  .stat-row{
+    display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:24px;
+  }
+  .stat-card{
+    border:1px solid var(--line); border-radius:12px; padding:16px; background:var(--ink);
+  }
+  .stat-card .v{font-family:'Markazi Text'; font-size:2rem; font-weight:700; color:var(--gold); line-height:1;}
+  .stat-card .l{font-size:0.74rem; color:var(--paper-dim); margin-top:4px;}
+
+  .toolbar{display:flex; gap:10px; flex-wrap:wrap; margin-bottom:18px; align-items:center;}
+  .toolbar select, .toolbar input[type=date]{
+    background:var(--ink); border:1px solid var(--line); color:var(--paper);
+    border-radius:8px; padding:9px 12px; font-family:'Cairo'; font-size:0.85rem;
+  }
+  .btn{
+    border:1px solid var(--line); background:var(--ink-3); color:var(--paper);
+    border-radius:8px; padding:9px 16px; font-family:'Cairo'; font-weight:600; font-size:0.85rem;
+    cursor:pointer; transition:.18s;
+  }
+  .btn:hover{border-color:var(--gold);}
+  .btn-primary{background:var(--garnet); border-color:var(--garnet); color:#fff;}
+  .btn-primary:hover{background:var(--garnet-bright); border-color:var(--garnet-bright);}
+  .btn-ghost{background:transparent;}
+  .btn-danger{color:var(--bad); border-color:rgba(177,74,74,0.4);}
+  .btn-danger:hover{border-color:var(--bad);}
+
+  table{width:100%; border-collapse:collapse; font-size:0.86rem;}
+  thead th{
+    text-align:right; color:var(--paper-dim); font-weight:600; font-size:0.74rem;
+    padding:8px 10px; border-bottom:1px solid var(--line); white-space:nowrap;
+  }
+  tbody td{padding:10px 10px; border-bottom:1px solid var(--line-soft); vertical-align:middle;}
+  tbody tr:hover{background:var(--line-soft);}
+  .name-cell{font-weight:700;}
+  .grp-tag{font-size:0.68rem; color:var(--paper-dim); display:block; margin-top:2px;}
+  .badge{
+    display:inline-flex; align-items:center; gap:5px; padding:4px 10px; border-radius:999px;
+    font-size:0.74rem; font-weight:700;
+  }
+  .badge .dot{width:7px;height:7px;border-radius:50%;}
+  .badge.present{background:rgba(93,156,108,0.15); color:var(--ok);}
+  .badge.present .dot{background:var(--ok);}
+  .badge.late{background:rgba(201,162,75,0.15); color:var(--gold);}
+  .badge.late .dot{background:var(--gold);}
+  .badge.absent{background:rgba(177,74,74,0.15); color:var(--bad);}
+  .badge.absent .dot{background:var(--bad);}
+  .rate-bar{width:70px; height:6px; background:var(--ink); border-radius:4px; overflow:hidden; display:inline-block; vertical-align:middle; margin-left:6px;}
+  .rate-bar > div{height:100%; background:var(--gold);}
+
+  .tabs2{display:flex; gap:6px; margin-bottom:20px; border-bottom:1px solid var(--line);}
+  .tabs2 button{
+    background:transparent; border:none; color:var(--paper-dim); font-family:'Cairo'; font-weight:700;
+    padding:10px 6px; cursor:pointer; border-bottom:2px solid transparent; font-size:0.92rem;
+  }
+  .tabs2 button.active{color:var(--gold); border-color:var(--gold);}
+
+  .roster-edit{margin-top:8px;}
+  .roster-row{display:flex; gap:8px; margin-bottom:8px; align-items:center;}
+  .roster-row input, .roster-row select{
+    background:var(--ink); border:1px solid var(--line); color:var(--paper);
+    border-radius:8px; padding:8px 10px; font-family:'Cairo'; font-size:0.85rem;
+  }
+  .roster-row input{flex:1;}
+  .icon-btn{
+    background:transparent; border:1px solid var(--line); color:var(--paper-dim);
+    border-radius:8px; width:34px; height:34px; cursor:pointer; flex:none; font-size:0.9rem;
+  }
+  .icon-btn:hover{border-color:var(--bad); color:var(--bad);}
+
+  footer{text-align:center; color:var(--paper-dim); font-size:0.74rem; padding:30px 0 10px; opacity:0.6;}
+
+  @media (max-width:680px){
+    .stat-row{grid-template-columns:repeat(2,1fr);}
+    table{font-size:0.78rem;}
+    thead th:nth-child(4), tbody td:nth-child(4){display:none;}
+  }
+  @media (prefers-reduced-motion: reduce){
+    *{animation:none !important; transition:none !important;}
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <svg class="clef" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M14.5 2c-1.8 1.6-2.7 3.6-2.7 6 0 1.4.3 3 .9 4.8-2 .6-3.4 2.2-3.4 4.3 0 2.4 1.9 4.2 4.3 4.2 2.1 0 3.7-1.4 3.7-3.3 0-1.5-1-2.6-2.4-2.6-1 0-1.7.6-1.7 1.5 0 .7.5 1.2 1.1 1.2.4 0 .6-.2.6-.5 0-.2-.1-.3-.3-.4-.1-.1-.2-.2-.2-.3 0-.2.2-.3.5-.3.6 0 1 .5 1 1.2 0 1.1-1 1.9-2.3 1.9-1.7 0-3-1.3-3-3.1 0-2 1.6-3.3 3.9-3.5.7 2 1.6 3.9 1.6 6 0 .9-.2 1.6-.6 2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+        <circle cx="8.3" cy="19.5" r="1.4" fill="currentColor"/>
+      </svg>
+      <div class="brand-text">
+        <h1>كورال فورتي</h1>
+        <span>سجلّ الحضور والبروفات</span>
+      </div>
+    </div>
+    <div class="role-switch">
+      <button id="tabMember" class="active">أنا عضو</button>
+      <button id="tabMaestro">نظرة المايسترو</button>
+    </div>
+  </div>
+</div>
+
+<div id="setupBanner" style="display:none; background:#3a2c10; border-bottom:1px solid var(--gold); padding:14px 20px; font-size:0.85rem; text-align:center; color:#f0d9a0;">
+  ⚠️ لسه محتاج تربط الموقع بقاعدة بيانات Firebase. شوف ملف <code style="background:rgba(0,0,0,0.25); padding:2px 6px; border-radius:5px;">دليل-الإعداد.md</code> المرفق مع الملفات — خطوتين بس.
+</div>
+
+<div class="wrap">
+
+  <!-- ===================== MEMBER VIEW ===================== -->
+  <div id="memberView">
+    <div class="card picker-card">
+      <div class="session-meta" id="sessionMeta"></div>
+      <div class="search-row">
+        <input type="text" id="memberSearch" placeholder="دوّر على اسمك…">
+      </div>
+      <div class="group-tabs" id="groupTabs"></div>
+      <div id="memberGridWrap">
+        <div class="member-grid" id="memberGrid"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== MAESTRO VIEW ===================== -->
+  <div id="maestroView" style="display:none;">
+
+    <div class="stat-row" id="statRow"></div>
+
+    <div class="tabs2">
+      <button class="active" data-panel="today">بروفة اليوم</button>
+      <button data-panel="history">السجل</button>
+      <button data-panel="roster">الأعضاء</button>
+    </div>
+
+    <!-- Today panel -->
+    <div id="panelToday">
+      <div class="card" style="padding:22px;">
+        <div class="section-title">
+          <span class="num">٠١</span>
+          <h2 id="todayTitle">بروفة اليوم</h2>
+          <span class="rule"></span>
+        </div>
+        <div class="toolbar">
+          <label class="pill" style="cursor:pointer;">
+            <input type="date" id="todayDate" style="background:transparent;border:none;color:var(--paper);padding:0;">
+          </label>
+          <button class="btn" id="markAllPresent">سجّل الكل حاضر</button>
+          <button class="btn btn-ghost" id="clearToday">تصفير بروفة اليوم</button>
+        </div>
+        <div id="todayTableWrap"></div>
+      </div>
+    </div>
+
+    <!-- History panel -->
+    <div id="panelHistory" style="display:none;">
+      <div class="card" style="padding:22px;">
+        <div class="section-title">
+          <span class="num">٠٢</span>
+          <h2>سجلّ البروفات</h2>
+          <span class="rule"></span>
+        </div>
+        <div class="toolbar">
+          <select id="historyMemberFilter"><option value="">كل الأعضاء</option></select>
+          <select id="historyGroupFilter"><option value="">كل الأقسام</option></select>
+          <button class="btn" id="exportCsv">تصدير CSV</button>
+        </div>
+        <div id="historyTableWrap"></div>
+      </div>
+    </div>
+
+    <!-- Roster panel -->
+    <div id="panelRoster" style="display:none;">
+      <div class="card" style="padding:22px;">
+        <div class="section-title">
+          <span class="num">٠٣</span>
+          <h2>إدارة الأعضاء والأقسام</h2>
+          <span class="rule"></span>
+        </div>
+        <p style="color:var(--paper-dim); font-size:0.85rem; margin-top:-8px;">القسمين الأساسيين: <b style="color:var(--paper)">موسيقي</b> (بآلاته) و<b style="color:var(--paper)">كورال</b> (سوبرانو / ألتو / تينور / باس).</p>
+        <div id="rosterEditWrap"></div>
+        <button class="btn btn-primary" id="addMemberBtn" style="margin-top:14px;">+ إضافة عضو</button>
+      </div>
+    </div>
+
+  </div>
+
+  <footer>كورال فورتي · سجلّ مبني عشان يبسّط متابعة البروفات</footer>
+</div>
+
+<div id="modalRoot"></div>
+<div id="toastRoot"></div>
+
+<script>
+/* ============================================================
+   FIREBASE CONFIG — استبدل القيم دي بالقيم اللي ناخدها من Firebase Console
+   شوف دليل-الإعداد.md للتفاصيل خطوة بخطوة
+   ============================================================ */
+const firebaseConfig = {
+  apiKey: "AIzaSyAkU6Qmty60cCe6W19mCGISmp7igUgv-4Y",
+  databaseURL: "https://forte-choir-default-rtdb.firebaseio.com",
+  projectId: "forte-choir"
+};
+
+const FIREBASE_NOT_CONFIGURED = firebaseConfig.apiKey === "ضع-apiKey-هنا";
+
+let db = null;
+if(!FIREBASE_NOT_CONFIGURED){
+  try{
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.database();
+  }catch(e){
+    console.error('فشل تهيئة Firebase', e);
+  }
+}
+
+/* ============================================================
+   DATA LAYER
+   ============================================================ */
+const DEFAULT_INSTRUMENTS = ["بيانو","كمان","تشيلو","چيتار","فلوت","درامز"];
+const VOICE_PARTS = ["سوبرانو","ألتو","تينور","باس"];
+const STATUS = ["حاضر","متأخر","غائب"];
+
+let state = {
+  members: [],     // {id, name, section: 'موسيقي'|'كورال', sub: instrument or voice part}
+  attendance: {}   // key `${date}` -> { memberId: status }
+};
+
+const todayISO = () => new Date().toISOString().slice(0,10);
+let currentDate = todayISO();
+let currentRole = 'member';
+let activeGroupFilter = 'الكل';
+let activeMaestroPanel = 'today';
+
+function uid(){ return 'm_' + Math.random().toString(36).slice(2,9); }
+
+async function loadState(){
+  if(FIREBASE_NOT_CONFIGURED){
+    document.getElementById('setupBanner').style.display = 'block';
+    // fallback: local-only in-memory mode so the screen isn't broken during setup
+    state.members = [];
+    state.attendance = {};
+    return;
+  }
+  try{
+    const snapshot = await db.ref('coral-forte').once('value');
+    const data = snapshot.val();
+    if(data){
+      state.members = data.members || [];
+      state.attendance = data.attendance || {};
+    } else {
+      state.members = [];
+      state.attendance = {};
+      await saveState();
+    }
+    // Listen for live updates from other devices (maestro adds a member, members see it instantly)
+    db.ref('coral-forte').on('value', (snap)=>{
+      const d = snap.val();
+      if(!d) return;
+      state.members = d.members || [];
+      state.attendance = d.attendance || {};
+      renderEverythingSafely();
+    });
+  }catch(e){
+    console.error('فشل تحميل البيانات من Firebase', e);
+    showToast('تعذّر الاتصال بقاعدة البيانات — راجع الإعداد');
+  }
+}
+
+let saveTimer = null;
+async function saveState(){
+  if(FIREBASE_NOT_CONFIGURED) return;
+  try{
+    await db.ref('coral-forte').set(state);
+  }catch(e){
+    console.error('فشل الحفظ', e);
+    showToast('حصل خطأ في الحفظ، حاول تاني');
+  }
+}
+function queueSave(){
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveState, 250);
+}
+
+function renderEverythingSafely(){
+  // called on live Firebase updates; re-render whichever view is active without losing user's place
+  renderSessionMeta();
+  renderGroupTabs();
+  renderMemberGrid();
+  if(currentRole === 'maestro') renderMaestroAll();
+}
+
+/* ============================================================
+   UTIL
+   ============================================================ */
+function showToast(msg){
+  const root = document.getElementById('toastRoot');
+  root.innerHTML = '';
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.textContent = msg;
+  root.appendChild(el);
+  setTimeout(()=>{ el.remove(); }, 2200);
+}
+
+function formatDateAr(iso){
+  const d = new Date(iso + 'T00:00:00');
+  return d.toLocaleDateString('ar-EG', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+}
+
+function getAttendanceFor(date){
+  return state.attendance[date] || {};
+}
+
+function setAttendance(date, memberId, status){
+  if(!state.attendance[date]) state.attendance[date] = {};
+  state.attendance[date][memberId] = { status, ts: new Date().toISOString() };
+  queueSave();
+}
+
+function groupsList(){
+  // returns ['موسيقي / آلة', ...] unique tags for display, but filter tabs are top-level: الكل / موسيقي / كورال
+  return ['الكل','موسيقي','كورال'];
+}
+
+/* ============================================================
+   RENDER: MEMBER VIEW
+   ============================================================ */
+function renderSessionMeta(){
+  const wrap = document.getElementById('sessionMeta');
+  const att = getAttendanceFor(currentDate);
+  const markedCount = Object.keys(att).length;
+  wrap.innerHTML = `
+    <div class="pill">📅 <b>${formatDateAr(currentDate)}</b></div>
+    <div class="pill">✔️ تم تسجيل <b>${markedCount}</b> من <b>${state.members.length}</b></div>
+  `;
+}
+
+function renderGroupTabs(){
+  const wrap = document.getElementById('groupTabs');
+  wrap.innerHTML = '';
+  groupsList().forEach(g=>{
+    const btn = document.createElement('button');
+    btn.textContent = g;
+    if(g === activeGroupFilter) btn.classList.add('active');
+    btn.onclick = ()=>{ activeGroupFilter = g; renderMemberGrid(); renderGroupTabs(); };
+    wrap.appendChild(btn);
+  });
+}
+
+function renderMemberGrid(){
+  const wrap = document.getElementById('memberGrid');
+  const search = (document.getElementById('memberSearch').value || '').trim().toLowerCase();
+  const att = getAttendanceFor(currentDate);
+
+  let list = state.members.filter(m=>{
+    if(activeGroupFilter !== 'الكل' && m.section !== activeGroupFilter) return false;
+    if(search && !m.name.toLowerCase().includes(search)) return false;
+    return true;
+  });
+
+  if(state.members.length === 0){
+    wrap.parentElement.innerHTML = `<div class="empty"><span class="glyph">🎼</span>لسه مفيش أعضاء مضافين.<br>المايسترو يقدر يضيف الأعضاء من "نظرة المايسترو" ← "الأعضاء".</div>`;
+    return;
+  }
+  if(list.length === 0){
+    wrap.innerHTML = `<div class="empty" style="grid-column:1/-1;"><span class="glyph">🔍</span>مفيش نتائج مطابقة.</div>`;
+    return;
+  }
+
+  wrap.innerHTML = '';
+  list.forEach(m=>{
+    const marked = att[m.id];
+    const btn = document.createElement('button');
+    btn.className = 'member-btn' + (marked ? ' marked' : '');
+    btn.innerHTML = `<span>${m.name}</span><span class="grp">${marked ? marked.status : (m.sub || m.section)}</span>`;
+    btn.onclick = ()=> openStatusModal(m);
+    wrap.appendChild(btn);
+  });
+}
+
+function openStatusModal(member){
+  const root = document.getElementById('modalRoot');
+  const att = getAttendanceFor(currentDate)[member.id];
+  root.innerHTML = `
+    <div class="modal-overlay" id="overlay">
+      <div class="modal">
+        <h3>${member.name}</h3>
+        <div class="sub">${member.sub ? member.sub + ' — ' : ''}${member.section} · ${formatDateAr(currentDate)}</div>
+        <div class="status-options">
+          ${STATUS.map(s=>`
+            <button class="status-btn" data-status="${s}">
+              <span class="dot"></span> ${s}
+            </button>
+          `).join('')}
+        </div>
+        <button class="modal-cancel" id="cancelModal">إلغاء</button>
+      </div>
+    </div>
+  `;
+  root.querySelectorAll('.status-btn').forEach(b=>{
+    b.onclick = ()=>{
+      setAttendance(currentDate, member.id, b.dataset.status);
+      root.innerHTML = '';
+      showToast(`تم تسجيل ${member.name}: ${b.dataset.status}`);
+      renderSessionMeta();
+      renderMemberGrid();
+      if(currentRole === 'maestro') renderMaestroAll();
+    };
+  });
+  document.getElementById('cancelModal').onclick = ()=> root.innerHTML = '';
+  document.getElementById('overlay').addEventListener('click', (e)=>{ if(e.target.id === 'overlay') root.innerHTML=''; });
+}
+
+/* ============================================================
+   RENDER: MAESTRO VIEW
+   ============================================================ */
+function renderStatRow(){
+  const wrap = document.getElementById('statRow');
+  const totalSessions = Object.keys(state.attendance).length;
+  let totalPresent=0, totalLate=0, totalAbsent=0;
+  Object.values(state.attendance).forEach(day=>{
+    Object.values(day).forEach(rec=>{
+      if(rec.status === 'حاضر') totalPresent++;
+      else if(rec.status === 'متأخر') totalLate++;
+      else if(rec.status === 'غائب') totalAbsent++;
+    });
+  });
+  const totalMarks = totalPresent + totalLate + totalAbsent;
+  const rate = totalMarks ? Math.round(((totalPresent+totalLate)/totalMarks)*100) : 0;
+
+  wrap.innerHTML = `
+    <div class="stat-card"><div class="v">${state.members.length}</div><div class="l">عضو مسجّل</div></div>
+    <div class="stat-card"><div class="v">${totalSessions}</div><div class="l">بروفة مسجّلة</div></div>
+    <div class="stat-card"><div class="v">${rate}%</div><div class="l">معدّل الحضور العام</div></div>
+    <div class="stat-card"><div class="v">${totalAbsent}</div><div class="l">حالات غياب</div></div>
+  `;
+}
+
+function renderTodayPanel(){
+  document.getElementById('todayDate').value = currentDate;
+  document.getElementById('todayTitle').textContent = `بروفة ${formatDateAr(currentDate)}`;
+  const wrap = document.getElementById('todayTableWrap');
+
+  if(state.members.length === 0){
+    wrap.innerHTML = `<div class="empty"><span class="glyph">🎼</span>أضف أعضاء أولاً من تبويب "الأعضاء".</div>`;
+    return;
+  }
+
+  const att = getAttendanceFor(currentDate);
+  wrap.innerHTML = `
+    <table>
+      <thead><tr><th>الاسم</th><th>القسم</th><th>الحالة</th><th></th></tr></thead>
+      <tbody>
+        ${state.members.map(m=>{
+          const rec = att[m.id];
+          const badge = rec ? badgeHtml(rec.status) : `<span style="color:var(--paper-dim); font-size:0.78rem;">لم يُسجَّل</span>`;
+          return `<tr>
+            <td class="name-cell">${m.name}</td>
+            <td><span class="grp-tag" style="margin:0;">${m.sub || m.section}</span></td>
+            <td>${badge}</td>
+            <td><button class="btn btn-ghost" data-set-id="${m.id}" style="padding:5px 10px; font-size:0.74rem;">تعديل</button></td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  `;
+  wrap.querySelectorAll('[data-set-id]').forEach(b=>{
+    b.onclick = ()=>{
+      const member = state.members.find(m=>m.id === b.dataset.setId);
+      if(member) openStatusModal(member);
+    };
+  });
+}
+
+function badgeHtml(status){
+  const cls = status === 'حاضر' ? 'present' : status === 'متأخر' ? 'late' : 'absent';
+  return `<span class="badge ${cls}"><span class="dot"></span>${status}</span>`;
+}
+
+function renderHistoryFilters(){
+  const memSel = document.getElementById('historyMemberFilter');
+  const grpSel = document.getElementById('historyGroupFilter');
+  const curMem = memSel.value, curGrp = grpSel.value;
+  memSel.innerHTML = '<option value="">كل الأعضاء</option>' + state.members.map(m=>`<option value="${m.id}">${m.name}</option>`).join('');
+  grpSel.innerHTML = '<option value="">كل الأقسام</option><option value="موسيقي">موسيقي</option><option value="كورال">كورال</option>';
+  memSel.value = curMem; grpSel.value = curGrp;
+}
+
+function renderHistoryPanel(){
+  const wrap = document.getElementById('historyTableWrap');
+  const memFilter = document.getElementById('historyMemberFilter').value;
+  const grpFilter = document.getElementById('historyGroupFilter').value;
+
+  const dates = Object.keys(state.attendance).sort().reverse();
+  if(dates.length === 0){
+    wrap.innerHTML = `<div class="empty"><span class="glyph">🗒️</span>لسه مفيش بروفات مسجّلة.</div>`;
+    return;
+  }
+
+  let rows = [];
+  dates.forEach(date=>{
+    const day = state.attendance[date];
+    Object.entries(day).forEach(([memberId, rec])=>{
+      const member = state.members.find(m=>m.id === memberId);
+      if(!member) return;
+      if(memFilter && memberId !== memFilter) return;
+      if(grpFilter && member.section !== grpFilter) return;
+      rows.push({date, member, rec});
+    });
+  });
+
+  if(rows.length === 0){
+    wrap.innerHTML = `<div class="empty"><span class="glyph">🔍</span>مفيش نتائج لهذا الفلتر.</div>`;
+    return;
+  }
+
+  wrap.innerHTML = `
+    <table>
+      <thead><tr><th>التاريخ</th><th>الاسم</th><th>القسم</th><th>الحالة</th></tr></thead>
+      <tbody>
+        ${rows.map(r=>`
+          <tr>
+            <td class="mono" style="font-size:0.78rem;">${r.date}</td>
+            <td class="name-cell">${r.member.name}</td>
+            <td><span class="grp-tag" style="margin:0;">${r.member.sub || r.member.section}</span></td>
+            <td>${badgeHtml(r.rec.status)}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+function renderRosterEditor(){
+  const wrap = document.getElementById('rosterEditWrap');
+  if(state.members.length === 0){
+    wrap.innerHTML = `<div class="empty"><span class="glyph">➕</span>لسه مفيش أعضاء. اضغط "إضافة عضو" تحت.</div>`;
+    return;
+  }
+  wrap.innerHTML = state.members.map(m=>`
+    <div class="roster-row" data-row-id="${m.id}">
+      <input type="text" value="${m.name}" data-field="name" placeholder="الاسم">
+      <select data-field="section">
+        <option value="موسيقي" ${m.section==='موسيقي'?'selected':''}>موسيقي</option>
+        <option value="كورال" ${m.section==='كورال'?'selected':''}>كورال</option>
+      </select>
+      <select data-field="sub"></select>
+      <button class="icon-btn" data-action="delete" title="حذف">✕</button>
+    </div>
+  `).join('');
+
+  // populate sub-selects according to current section
+  wrap.querySelectorAll('.roster-row').forEach(row=>{
+    const id = row.dataset.rowId;
+    const member = state.members.find(m=>m.id===id);
+    const subSelect = row.querySelector('[data-field="sub"]');
+    fillSubOptions(subSelect, member.section, member.sub);
+
+    row.querySelector('[data-field="name"]').addEventListener('input', (e)=>{
+      member.name = e.target.value;
+      queueSave();
+    });
+    row.querySelector('[data-field="section"]').addEventListener('change', (e)=>{
+      member.section = e.target.value;
+      member.sub = e.target.value === 'موسيقي' ? DEFAULT_INSTRUMENTS[0] : VOICE_PARTS[0];
+      fillSubOptions(subSelect, member.section, member.sub);
+      queueSave();
+      renderMaestroAll();
+    });
+    subSelect.addEventListener('change', (e)=>{
+      member.sub = e.target.value;
+      queueSave();
+    });
+    row.querySelector('[data-action="delete"]').addEventListener('click', ()=>{
+      if(!confirm(`حذف ${member.name} نهائيًا من الفريق؟`)) return;
+      state.members = state.members.filter(m=>m.id!==id);
+      queueSave();
+      renderMaestroAll();
+      renderMemberGrid();
+    });
+  });
+}
+
+function fillSubOptions(select, section, current){
+  const opts = section === 'موسيقي' ? DEFAULT_INSTRUMENTS : VOICE_PARTS;
+  select.innerHTML = opts.map(o=>`<option value="${o}" ${o===current?'selected':''}>${o}</option>`).join('');
+  if(!opts.includes(current) && current){
+    select.insertAdjacentHTML('afterbegin', `<option value="${current}" selected>${current}</option>`);
+  }
+}
+
+function renderMaestroAll(){
+  renderStatRow();
+  renderTodayPanel();
+  renderHistoryFilters();
+  renderHistoryPanel();
+  renderRosterEditor();
+}
+
+/* ============================================================
+   CSV EXPORT
+   ============================================================ */
+function exportCsv(){
+  const rows = [['التاريخ','الاسم','القسم','الفرع','الحالة']];
+  Object.keys(state.attendance).sort().forEach(date=>{
+    Object.entries(state.attendance[date]).forEach(([memberId, rec])=>{
+      const member = state.members.find(m=>m.id===memberId);
+      if(!member) return;
+      rows.push([date, member.name, member.section, member.sub||'', rec.status]);
+    });
+  });
+  const csv = rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `حضور-كورال-فورتي-${currentDate}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}
+
+/* ============================================================
+   EVENTS / INIT
+   ============================================================ */
+function bindStaticEvents(){
+  document.getElementById('tabMember').onclick = ()=>{
+    currentRole='member';
+    document.getElementById('tabMember').classList.add('active');
+    document.getElementById('tabMaestro').classList.remove('active');
+    document.getElementById('memberView').style.display='block';
+    document.getElementById('maestroView').style.display='none';
+  };
+  document.getElementById('tabMaestro').onclick = ()=>{
+    currentRole='maestro';
+    document.getElementById('tabMaestro').classList.add('active');
+    document.getElementById('tabMember').classList.remove('active');
+    document.getElementById('memberView').style.display='none';
+    document.getElementById('maestroView').style.display='block';
+    renderMaestroAll();
+  };
+
+  document.getElementById('memberSearch').addEventListener('input', renderMemberGrid);
+
+  document.querySelectorAll('.tabs2 button').forEach(btn=>{
+    btn.onclick = ()=>{
+      document.querySelectorAll('.tabs2 button').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      const panel = btn.dataset.panel;
+      activeMaestroPanel = panel;
+      document.getElementById('panelToday').style.display = panel==='today' ? 'block':'none';
+      document.getElementById('panelHistory').style.display = panel==='history' ? 'block':'none';
+      document.getElementById('panelRoster').style.display = panel==='roster' ? 'block':'none';
+    };
+  });
+
+  document.getElementById('todayDate').addEventListener('change', (e)=>{
+    currentDate = e.target.value || todayISO();
+    renderSessionMeta();
+    renderMemberGrid();
+    renderTodayPanel();
+  });
+
+  document.getElementById('markAllPresent').onclick = ()=>{
+    if(state.members.length === 0) return;
+    if(!confirm('تسجيل كل الأعضاء حاضرين في هذا التاريخ؟')) return;
+    state.members.forEach(m=> setAttendance(currentDate, m.id, 'حاضر'));
+    renderMaestroAll(); renderSessionMeta(); renderMemberGrid();
+    showToast('تم تسجيل الكل حاضر');
+  };
+  document.getElementById('clearToday').onclick = ()=>{
+    if(!state.attendance[currentDate]) return;
+    if(!confirm('تصفير كل تسجيلات هذا التاريخ؟')) return;
+    delete state.attendance[currentDate];
+    queueSave();
+    renderMaestroAll(); renderSessionMeta(); renderMemberGrid();
+    showToast('تم التصفير');
+  };
+
+  document.getElementById('historyMemberFilter').addEventListener('change', renderHistoryPanel);
+  document.getElementById('historyGroupFilter').addEventListener('change', renderHistoryPanel);
+  document.getElementById('exportCsv').onclick = exportCsv;
+
+  document.getElementById('addMemberBtn').onclick = ()=>{
+    state.members.push({ id: uid(), name: 'عضو جديد', section: 'كورال', sub: VOICE_PARTS[0] });
+    queueSave();
+    renderRosterEditor();
+    renderMaestroAll();
+    renderMemberGrid();
+  };
+}
+
+async function init(){
+  document.getElementById('memberGrid').innerHTML = `<div class="skeleton" style="height:60px; grid-column:1/-1;"></div>`;
+  await loadState();
+  bindStaticEvents();
+  renderSessionMeta();
+  renderGroupTabs();
+  renderMemberGrid();
+}
+
+init();
+</script>
+</body>
+</html>
