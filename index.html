@@ -685,6 +685,17 @@ function renderMemberGrid(){
     return;
   }
 
+  // Sort by today's status: حاضر أولاً، بعدهم متأخر، بعدهم غائب، وأخيرًا من لم يُسجَّل
+  const statusOrder = { 'حاضر': 0, 'متأخر': 1, 'غائب': 2 };
+  list = list.slice().sort((a, b)=>{
+    const aStatus = att[a.id] ? att[a.id].status : null;
+    const bStatus = att[b.id] ? att[b.id].status : null;
+    const aRank = aStatus !== null ? statusOrder[aStatus] : 3;
+    const bRank = bStatus !== null ? statusOrder[bStatus] : 3;
+    if(aRank !== bRank) return aRank - bRank;
+    return a.name.localeCompare(b.name, 'ar');
+  });
+
   wrap.innerHTML = '';
   list.forEach(m=>{
     const marked = att[m.id];
