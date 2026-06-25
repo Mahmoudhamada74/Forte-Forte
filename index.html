@@ -318,13 +318,28 @@
   <!-- ===================== MEMBER VIEW ===================== -->
   <div id="memberView">
     <div class="card picker-card">
-      <div class="session-meta" id="sessionMeta"></div>
-      <div class="search-row">
-        <input type="text" id="memberSearch" placeholder="دوّر على اسمك…">
+      <div id="memberSearchStage">
+        <div class="session-meta" id="sessionMeta"></div>
+        <div class="search-row">
+          <input type="text" id="memberSearch" placeholder="دوّر على اسمك…">
+        </div>
+        <div class="group-tabs" id="groupTabs"></div>
+        <div id="memberGridWrap">
+          <div class="member-grid" id="memberGrid"></div>
+        </div>
       </div>
-      <div class="group-tabs" id="groupTabs"></div>
-      <div id="memberGridWrap">
-        <div class="member-grid" id="memberGrid"></div>
+
+      <!-- Personal status view, shown after picking a name -->
+      <div id="memberPersonalStage" style="display:none;">
+        <button class="btn btn-ghost" id="backToSearch" style="margin-bottom:18px;">→ رجوع للبحث</button>
+        <div id="personalHeader"></div>
+        <div id="personalToday" style="margin:18px 0;"></div>
+        <div class="section-title">
+          <span class="num">سجلّي</span>
+          <h2>سجلّ حضوري</h2>
+          <span class="rule"></span>
+        </div>
+        <div id="personalHistoryWrap"></div>
       </div>
     </div>
   </div>
@@ -601,9 +616,60 @@ function renderMemberGrid(){
     const btn = document.createElement('button');
     btn.className = 'member-btn' + (marked ? ' marked' : '');
     btn.innerHTML = `<span>${m.name}</span><span class="grp">${marked ? marked.status : (m.sub || m.section)}</span>`;
-    btn.onclick = ()=> openStatusModal(m);
+    btn.onclick = ()=> openPersonalView(m);
     wrap.appendChild(btn);
   });
+}
+
+/* ---------- Read-only personal view for members ---------- */
+function openPersonalView(member){
+  document.getElementById('memberSearchStage').style.display = 'none';
+  document.getElementById('memberPersonalStage').style.display = 'block';
+
+  document.getElementById('personalHeader').innerHTML = `
+    <h2 style="margin:0 0 4px; font-size:1.25rem;">${member.name}</h2>
+    <div style="color:var(--paper-dim); font-size:0.85rem;">${member.sub ? member.sub + ' — ' : ''}${member.section}</div>
+  `;
+
+  const todayRec = getAttendanceFor(currentDate)[member.id];
+  document.getElementById('personalToday').innerHTML = `
+    <div class="pill" style="display:inline-flex;">
+      📅 <b>${formatDateAr(currentDate)}</b>
+      &nbsp;·&nbsp;
+      ${todayRec ? badgeHtml(todayRec.status) : '<span style="color:var(--paper-dim);">لم يُسجَّل بعد</span>'}
+    </div>
+  `;
+
+  const dates = Object.keys(state.attendance).sort().reverse();
+  const rows = [];
+  dates.forEach(date=>{
+    const rec = state.attendance[date][member.id];
+    if(rec) rows.push({date, rec});
+  });
+
+  const histWrap = document.getElementById('personalHistoryWrap');
+  if(rows.length === 0){
+    histWrap.innerHTML = `<div class="empty"><span class="glyph">🗒️</span>لسه مفيش بروفات مسجّلة لك.</div>`;
+  } else {
+    histWrap.innerHTML = `
+      <table>
+        <thead><tr><th>التاريخ</th><th>الحالة</th></tr></thead>
+        <tbody>
+          ${rows.map(r=>`
+            <tr>
+              <td class="mono" style="font-size:0.78rem;">${formatDateAr(r.date)}</td>
+              <td>${badgeHtml(r.rec.status)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  }
+}
+
+function backToMemberSearch(){
+  document.getElementById('memberPersonalStage').style.display = 'none';
+  document.getElementById('memberSearchStage').style.display = 'block';
 }
 
 function openStatusModal(member){
@@ -877,6 +943,7 @@ function bindStaticEvents(){
   });
 
   document.getElementById('memberSearch').addEventListener('input', renderMemberGrid);
+  document.getElementById('backToSearch').addEventListener('click', backToMemberSearch);
 
   document.querySelectorAll('.tabs2 button').forEach(btn=>{
     btn.onclick = ()=>{
