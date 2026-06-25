@@ -178,6 +178,26 @@
     margin-top:16px; width:100%; background:transparent; border:none; color:var(--paper-dim);
     font-family:'Cairo'; padding:8px; cursor:pointer; font-size:0.85rem;
   }
+
+  /* ---------- Maestro lock screen ---------- */
+  .lock-screen{
+    max-width:380px; margin:60px auto; padding:32px 26px; text-align:center;
+  }
+  .lock-screen .lock-glyph{font-size:2.4rem; color:var(--gold); margin-bottom:14px; display:block;}
+  .lock-screen h3{margin:0 0 6px; font-size:1.15rem;}
+  .lock-screen p{color:var(--paper-dim); font-size:0.85rem; margin:0 0 22px;}
+  .lock-screen input{
+    width:100%; background:var(--ink); border:1px solid var(--line); color:var(--paper);
+    border-radius:10px; padding:13px 16px; font-family:'Cairo'; font-size:1rem; text-align:center;
+    margin-bottom:12px; letter-spacing:0.05em;
+  }
+  .lock-screen input:focus{outline:2px solid var(--gold); outline-offset:1px;}
+  .lock-screen .lock-error{color:var(--bad); font-size:0.82rem; margin-bottom:10px; min-height:18px;}
+  .lock-screen button.unlock-btn{
+    width:100%; background:var(--garnet); border:1px solid var(--garnet); color:#fff;
+    border-radius:10px; padding:13px; font-family:'Cairo'; font-weight:700; font-size:0.95rem; cursor:pointer;
+  }
+  .lock-screen button.unlock-btn:hover{background:var(--garnet-bright);}
   .toast{
     position:fixed; bottom:28px; left:50%; transform:translateX(-50%);
     background:var(--garnet); color:var(--paper); padding:12px 22px; border-radius:999px;
@@ -312,6 +332,19 @@
   <!-- ===================== MAESTRO VIEW ===================== -->
   <div id="maestroView" style="display:none;">
 
+    <!-- Lock screen shown until correct password entered -->
+    <div id="maestroLock" class="card lock-screen">
+      <span class="lock-glyph">🔒</span>
+      <h3>دخول المايسترو</h3>
+      <p>الصفحة دي مخصوصة للمايسترو بس. اكتب كلمة السر للدخول.</p>
+      <input type="password" id="maestroPassword" placeholder="كلمة السر" autocomplete="off">
+      <div class="lock-error" id="lockError"></div>
+      <button class="unlock-btn" id="unlockBtn">دخول</button>
+    </div>
+
+    <!-- Actual dashboard, hidden until unlocked -->
+    <div id="maestroDashboard" style="display:none;">
+
     <div class="stat-row" id="statRow"></div>
 
     <div class="tabs2">
@@ -370,6 +403,7 @@
       </div>
     </div>
 
+    </div><!-- /maestroDashboard -->
   </div>
 
   <footer>كورال فورتي · سجلّ مبني عشان يبسّط متابعة البروفات</footer>
@@ -390,6 +424,12 @@ const firebaseConfig = {
 };
 
 const FIREBASE_NOT_CONFIGURED = firebaseConfig.apiKey === "ضع-apiKey-هنا";
+
+/* ============================================================
+   MAESTRO PASSWORD — غيّرها من هنا في أي وقت
+   ============================================================ */
+const MAESTRO_PASSWORD = "MM7422";
+const MAESTRO_SESSION_KEY = "coral-forte-maestro-unlocked";
 
 let db = null;
 if(!FIREBASE_NOT_CONFIGURED){
@@ -474,7 +514,7 @@ function renderEverythingSafely(){
   renderSessionMeta();
   renderGroupTabs();
   renderMemberGrid();
-  if(currentRole === 'maestro') renderMaestroAll();
+  if(currentRole === 'maestro' && isMaestroUnlocked()) renderMaestroAll();
 }
 
 /* ============================================================
@@ -592,7 +632,7 @@ function openStatusModal(member){
       showToast(`تم تسجيل ${member.name}: ${b.dataset.status}`);
       renderSessionMeta();
       renderMemberGrid();
-      if(currentRole === 'maestro') renderMaestroAll();
+      if(currentRole === 'maestro' && isMaestroUnlocked()) renderMaestroAll();
     };
   });
   document.getElementById('cancelModal').onclick = ()=> root.innerHTML = '';
@@ -823,8 +863,18 @@ function bindStaticEvents(){
     document.getElementById('tabMember').classList.remove('active');
     document.getElementById('memberView').style.display='none';
     document.getElementById('maestroView').style.display='block';
-    renderMaestroAll();
+
+    if(isMaestroUnlocked()){
+      showMaestroDashboard();
+    } else {
+      showMaestroLock();
+    }
   };
+
+  document.getElementById('unlockBtn').onclick = attemptUnlock;
+  document.getElementById('maestroPassword').addEventListener('keydown', (e)=>{
+    if(e.key === 'Enter') attemptUnlock();
+  });
 
   document.getElementById('memberSearch').addEventListener('input', renderMemberGrid);
 
@@ -874,6 +924,43 @@ function bindStaticEvents(){
     renderMaestroAll();
     renderMemberGrid();
   };
+}
+
+/* ============================================================
+   MAESTRO LOCK SCREEN
+   ============================================================ */
+function isMaestroUnlocked(){
+  try{
+    return sessionStorage.getItem(MAESTRO_SESSION_KEY) === 'yes';
+  }catch(e){
+    return false;
+  }
+}
+
+function showMaestroLock(){
+  document.getElementById('maestroLock').style.display = 'block';
+  document.getElementById('maestroDashboard').style.display = 'none';
+  document.getElementById('lockError').textContent = '';
+  document.getElementById('maestroPassword').value = '';
+  setTimeout(()=> document.getElementById('maestroPassword').focus(), 50);
+}
+
+function showMaestroDashboard(){
+  document.getElementById('maestroLock').style.display = 'none';
+  document.getElementById('maestroDashboard').style.display = 'block';
+  renderMaestroAll();
+}
+
+function attemptUnlock(){
+  const input = document.getElementById('maestroPassword').value;
+  if(input === MAESTRO_PASSWORD){
+    try{ sessionStorage.setItem(MAESTRO_SESSION_KEY, 'yes'); }catch(e){}
+    showMaestroDashboard();
+  } else {
+    document.getElementById('lockError').textContent = 'كلمة السر غلط، جرّب تاني.';
+    document.getElementById('maestroPassword').value = '';
+    document.getElementById('maestroPassword').focus();
+  }
 }
 
 async function init(){
