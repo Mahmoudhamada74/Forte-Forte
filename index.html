@@ -143,6 +143,10 @@
     display:flex; flex-direction:column; gap:4px;
   }
   .member-btn .grp{font-size:0.68rem; color:var(--paper-dim); font-weight:500;}
+  .mini-lastseen{
+    display:flex; gap:8px; margin-top:6px; padding-top:6px; border-top:1px solid var(--line-soft);
+    font-size:0.64rem; font-weight:700; font-family:'IBM Plex Mono', monospace;
+  }
   .member-btn:hover{border-color:var(--gold); transform:translateY(-1px);}
   .member-btn:focus-visible{outline:2px solid var(--gold); outline-offset:2px;}
   .member-btn.status-present{border-color:var(--ok); background:rgba(93,156,108,0.12);}
@@ -410,6 +414,10 @@
         <div class="toolbar">
           <select id="historyMemberFilter"><option value="">كل الأعضاء</option></select>
           <select id="historyGroupFilter"><option value="">كل الأقسام</option></select>
+          <label class="pill" style="cursor:pointer;">
+            <input type="date" id="historyDateFilter" style="background:transparent;border:none;color:var(--paper);padding:0;">
+          </label>
+          <button class="btn btn-ghost" id="clearHistoryDate">مسح فلتر التاريخ</button>
           <button class="btn" id="exportCsv">تصدير CSV</button>
         </div>
         <div id="historyTableWrap"></div>
@@ -666,10 +674,25 @@ function renderMemberGrid(){
     const marked = att[m.id];
     const btn = document.createElement('button');
     btn.className = 'member-btn' + (marked ? ' ' + statusClass(marked.status) : '');
-    btn.innerHTML = `<span>${m.name}</span><span class="grp">${marked ? marked.status : (m.sub || m.section)}</span>`;
+    btn.innerHTML = `
+      <span>${m.name}</span>
+      <span class="grp">${marked ? marked.status : (m.sub || m.section)}</span>
+      ${miniLastSeenHtml(m.id)}
+    `;
     btn.onclick = ()=> openPersonalView(m);
     wrap.appendChild(btn);
   });
+}
+
+function miniLastSeenHtml(memberId){
+  const last = getLastStatusDates(memberId);
+  return `
+    <span class="mini-lastseen">
+      <span style="color:var(--ok);">${last['حاضر'] ? formatDateShort(last['حاضر']) : '—'}</span>
+      <span style="color:var(--gold);">${last['متأخر'] ? formatDateShort(last['متأخر']) : '—'}</span>
+      <span style="color:var(--bad);">${last['غائب'] ? formatDateShort(last['غائب']) : '—'}</span>
+    </span>
+  `;
 }
 
 function statusClass(status){
@@ -860,6 +883,7 @@ function renderHistoryPanel(){
   const wrap = document.getElementById('historyTableWrap');
   const memFilter = document.getElementById('historyMemberFilter').value;
   const grpFilter = document.getElementById('historyGroupFilter').value;
+  const dateFilter = document.getElementById('historyDateFilter').value;
 
   const dates = Object.keys(state.attendance).sort().reverse();
   if(dates.length === 0){
@@ -869,6 +893,7 @@ function renderHistoryPanel(){
 
   let rows = [];
   dates.forEach(date=>{
+    if(dateFilter && date !== dateFilter) return;
     const day = state.attendance[date];
     Object.entries(day).forEach(([memberId, rec])=>{
       const member = state.members.find(m=>m.id === memberId);
@@ -1006,6 +1031,9 @@ function bindStaticEvents(){
     document.getElementById('tabMaestro').classList.remove('active');
     document.getElementById('memberView').style.display='block';
     document.getElementById('maestroView').style.display='none';
+    renderSessionMeta();
+    renderGroupTabs();
+    renderMemberGrid();
   };
   document.getElementById('tabMaestro').onclick = ()=>{
     currentRole='maestro';
@@ -1038,6 +1066,9 @@ function bindStaticEvents(){
       document.getElementById('panelToday').style.display = panel==='today' ? 'block':'none';
       document.getElementById('panelHistory').style.display = panel==='history' ? 'block':'none';
       document.getElementById('panelRoster').style.display = panel==='roster' ? 'block':'none';
+      if(panel === 'today') renderTodayPanel();
+      if(panel === 'history'){ renderHistoryFilters(); renderHistoryPanel(); }
+      if(panel === 'roster') renderRosterEditor();
     };
   });
 
@@ -1066,6 +1097,11 @@ function bindStaticEvents(){
 
   document.getElementById('historyMemberFilter').addEventListener('change', renderHistoryPanel);
   document.getElementById('historyGroupFilter').addEventListener('change', renderHistoryPanel);
+  document.getElementById('historyDateFilter').addEventListener('change', renderHistoryPanel);
+  document.getElementById('clearHistoryDate').addEventListener('click', ()=>{
+    document.getElementById('historyDateFilter').value = '';
+    renderHistoryPanel();
+  });
   document.getElementById('exportCsv').onclick = exportCsv;
 
   document.getElementById('addMemberBtn').onclick = ()=>{
