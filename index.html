@@ -572,6 +572,45 @@ function setAttendance(date, memberId, status){
   queueSave();
 }
 
+function getLastStatusDates(memberId){
+  // returns {'حاضر': '2026-06-20', 'متأخر': null, 'غائب': '2026-06-01'} — most recent date per status
+  const result = { 'حاضر': null, 'متأخر': null, 'غائب': null };
+  const dates = Object.keys(state.attendance).sort(); // ascending, so last write wins as "latest"
+  dates.forEach(date=>{
+    const rec = state.attendance[date][memberId];
+    if(rec && result.hasOwnProperty(rec.status)){
+      result[rec.status] = date;
+    }
+  });
+  return result;
+}
+
+function lastSeenSummaryHtml(memberId){
+  const last = getLastStatusDates(memberId);
+  const cardDef = [
+    { status: 'حاضر', label: 'آخر حضور', cls: 'status-present' },
+    { status: 'متأخر', label: 'آخر تأخير', cls: 'status-late' },
+    { status: 'غائب', label: 'آخر غياب', cls: 'status-absent' }
+  ];
+  return `
+    <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px;">
+      ${cardDef.map(c=>`
+        <div class="stat-card" style="padding:10px 8px; text-align:center;">
+          <div style="font-size:0.68rem; color:var(--paper-dim); margin-bottom:4px;">${c.label}</div>
+          <div class="mono ${c.cls}" style="font-size:0.78rem; font-weight:700; color:${last[c.status] ? 'var(--paper)' : 'var(--paper-dim)'};">
+            ${last[c.status] ? formatDateShort(last[c.status]) : '—'}
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function formatDateShort(iso){
+  const d = new Date(iso + 'T00:00:00');
+  return d.toLocaleDateString('ar-EG', { day:'numeric', month:'short' });
+}
+
 function groupsList(){
   // returns ['موسيقي / آلة', ...] unique tags for display, but filter tabs are top-level: الكل / موسيقي / كورال
   return ['الكل','موسيقي','كورال'];
@@ -614,7 +653,7 @@ function renderMemberGrid(){
   });
 
   if(state.members.length === 0){
-    wrap.parentElement.innerHTML = `<div class="empty"><span class="glyph">🎼</span>لسه مفيش أعضاء مضافين.<br>المايسترو يقدر يضيف الأعضاء من "نظرة المايسترو" ← "الأعضاء".</div>`;
+    wrap.innerHTML = `<div class="empty" style="grid-column:1/-1;"><span class="glyph">🎼</span>لسه مفيش أعضاء مضافين.<br>المايسترو يقدر يضيف الأعضاء من "نظرة المايسترو" ← "الأعضاء".</div>`;
     return;
   }
   if(list.length === 0){
@@ -652,11 +691,12 @@ function openPersonalView(member){
 
   const todayRec = getAttendanceFor(currentDate)[member.id];
   document.getElementById('personalToday').innerHTML = `
-    <div class="pill" style="display:inline-flex;">
+    <div class="pill" style="display:inline-flex; margin-bottom:14px;">
       📅 <b>${formatDateAr(currentDate)}</b>
       &nbsp;·&nbsp;
       ${todayRec ? badgeHtml(todayRec.status) : '<span style="color:var(--paper-dim);">لم يُسجَّل بعد</span>'}
     </div>
+    ${lastSeenSummaryHtml(member.id)}
   `;
 
   const dates = Object.keys(state.attendance).sort().reverse();
@@ -797,6 +837,7 @@ function renderTodayPanel(){
       showToast(sel.value ? `تم تسجيل ${member.name}: ${sel.value}` : `تم إلغاء تسجيل ${member.name}`);
       renderStatRow();
       renderSessionMeta();
+      renderRosterEditor();
     });
   });
 }
@@ -866,8 +907,10 @@ function renderRosterEditor(){
     wrap.innerHTML = `<div class="empty"><span class="glyph">➕</span>لسه مفيش أعضاء. اضغط "إضافة عضو" تحت.</div>`;
     return;
   }
-  wrap.innerHTML = state.members.map(m=>`
-    <div class="roster-row" data-row-id="${m.id}">
+  wrap.innerHTML = state.members.map(m=>{
+    const last = getLastStatusDates(m.id);
+    return `
+    <div class="roster-row" data-row-id="${m.id}" style="flex-wrap:wrap; align-items:flex-start;">
       <input type="text" value="${m.name}" data-field="name" placeholder="الاسم">
       <select data-field="section">
         <option value="موسيقي" ${m.section==='موسيقي'?'selected':''}>موسيقي</option>
@@ -875,8 +918,14 @@ function renderRosterEditor(){
       </select>
       <select data-field="sub"></select>
       <button class="icon-btn" data-action="delete" title="حذف">✕</button>
+      <div style="flex:0 0 100%; display:flex; gap:14px; padding:6px 2px 2px; font-size:0.72rem; color:var(--paper-dim);">
+        <span>آخر حضور: <b style="color:${last['حاضر'] ? 'var(--ok)' : 'var(--paper-dim)'};">${last['حاضر'] ? formatDateShort(last['حاضر']) : '—'}</b></span>
+        <span>آخر تأخير: <b style="color:${last['متأخر'] ? 'var(--gold)' : 'var(--paper-dim)'};">${last['متأخر'] ? formatDateShort(last['متأخر']) : '—'}</b></span>
+        <span>آخر غياب: <b style="color:${last['غائب'] ? 'var(--bad)' : 'var(--paper-dim)'};">${last['غائب'] ? formatDateShort(last['غائب']) : '—'}</b></span>
+      </div>
     </div>
-  `).join('');
+  `;
+  }).join('');
 
   // populate sub-selects according to current section
   wrap.querySelectorAll('.roster-row').forEach(row=>{
