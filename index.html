@@ -239,17 +239,16 @@
   .stat-card .l{font-size:0.74rem; color:var(--paper-dim); margin-top:4px;}
 
   .toolbar{
-    display:grid; grid-template-columns:repeat(auto-fit, minmax(140px,1fr)); gap:10px; margin-bottom:18px;
+    display:grid; grid-template-columns:repeat(auto-fit, minmax(86px,1fr)); gap:7px; margin-bottom:18px;
   }
   .toolbar > *{width:100%; box-sizing:border-box; margin:0;}
   .toolbar select, .toolbar input[type=date]{
     background:var(--ink); border:1px solid var(--line); color:var(--paper);
-    border-radius:8px; padding:9px 12px; font-family:'Cairo'; font-size:0.85rem;
-    height:40px;
+    border-radius:8px; padding:8px 8px; font-family:'Cairo'; font-size:0.76rem;
+    height:40px; -webkit-appearance:none; appearance:none;
   }
-  .toolbar .btn{height:40px; display:flex; align-items:center; justify-content:center;}
-  .toolbar .pill{height:40px; box-sizing:border-box; display:flex; align-items:center; justify-content:center; gap:6px;}
-  .toolbar .pill input[type=date]{padding:0; height:auto; flex:1;}
+  .toolbar input[type=date]::-webkit-calendar-picker-indicator{filter:invert(0.8);}
+  .toolbar .btn{height:40px; display:flex; align-items:center; justify-content:center; padding:8px 6px; font-size:0.76rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
   .btn{
     border:1px solid var(--line); background:var(--ink-3); color:var(--paper);
     border-radius:8px; padding:9px 16px; font-family:'Cairo'; font-weight:600; font-size:0.85rem;
@@ -414,11 +413,9 @@
           <span class="rule"></span>
         </div>
         <div class="toolbar">
-          <label class="pill" style="cursor:pointer;">
-            <input type="date" id="todayDate" style="background:transparent;border:none;color:var(--paper);padding:0;">
-          </label>
-          <button class="btn" id="markAllPresent">سجّل الكل حاضر</button>
-          <button class="btn btn-ghost" id="clearToday">تصفير بروفة اليوم</button>
+          <input type="date" id="todayDate">
+          <button class="btn" id="markAllPresent">تسجيل الكل حاضر</button>
+          <button class="btn btn-ghost" id="clearToday">تصفير اليوم</button>
         </div>
         <div id="todayTableWrap"></div>
       </div>
@@ -435,10 +432,8 @@
         <div class="toolbar">
           <select id="historyMemberFilter"><option value="">كل الأعضاء</option></select>
           <select id="historyGroupFilter"><option value="">كل الأقسام</option></select>
-          <label class="pill" style="cursor:pointer;">
-            <input type="date" id="historyDateFilter" style="background:transparent;border:none;color:var(--paper);padding:0;">
-          </label>
-          <button class="btn btn-ghost" id="clearHistoryDate">مسح فلتر التاريخ</button>
+          <input type="date" id="historyDateFilter">
+          <button class="btn btn-ghost" id="clearHistoryDate">مسح التاريخ</button>
           <button class="btn" id="exportCsv">تصدير CSV</button>
         </div>
         <div id="historyTableWrap"></div>
