@@ -257,6 +257,17 @@
   .badge.late .dot{background:var(--gold);}
   .badge.absent{background:rgba(177,74,74,0.15); color:var(--bad);}
   .badge.absent .dot{background:var(--bad);}
+
+  /* ---------- Inline status dropdown (maestro today panel) ---------- */
+  .status-select{
+    background:var(--ink); border:1px solid var(--line); color:var(--paper-dim);
+    border-radius:8px; padding:7px 10px; font-family:'Cairo'; font-weight:600; font-size:0.82rem;
+    cursor:pointer; min-width:110px;
+  }
+  .status-select:focus{outline:2px solid var(--gold); outline-offset:1px;}
+  .status-select.status-present{border-color:var(--ok); color:var(--ok); background:rgba(93,156,108,0.12);}
+  .status-select.status-late{border-color:var(--warn); color:var(--gold); background:rgba(201,162,75,0.12);}
+  .status-select.status-absent{border-color:var(--bad); color:var(--bad); background:rgba(177,74,74,0.12);}
   .rate-bar{width:70px; height:6px; background:var(--ink); border-radius:4px; overflow:hidden; display:inline-block; vertical-align:middle; margin-left:6px;}
   .rate-bar > div{height:100%; background:var(--gold);}
 
@@ -751,26 +762,42 @@ function renderTodayPanel(){
   const att = getAttendanceFor(currentDate);
   wrap.innerHTML = `
     <table>
-      <thead><tr><th>الاسم</th><th>القسم</th><th>الحالة</th><th></th></tr></thead>
+      <thead><tr><th>الاسم</th><th>القسم</th><th>الحالة</th></tr></thead>
       <tbody>
         ${state.members.map(m=>{
           const rec = att[m.id];
-          const badge = rec ? badgeHtml(rec.status) : `<span style="color:var(--paper-dim); font-size:0.78rem;">لم يُسجَّل</span>`;
+          const current = rec ? rec.status : '';
           return `<tr>
             <td class="name-cell">${m.name}</td>
             <td><span class="grp-tag" style="margin:0;">${m.sub || m.section}</span></td>
-            <td>${badge}</td>
-            <td><button class="btn btn-ghost" data-set-id="${m.id}" style="padding:5px 10px; font-size:0.74rem;">تعديل</button></td>
+            <td>
+              <select class="status-select ${current ? statusClass(current) : ''}" data-set-id="${m.id}">
+                <option value="" ${current === '' ? 'selected' : ''}>لم يُسجَّل</option>
+                ${STATUS.map(s=>`<option value="${s}" ${current === s ? 'selected' : ''}>${s}</option>`).join('')}
+              </select>
+            </td>
           </tr>`;
         }).join('')}
       </tbody>
     </table>
   `;
-  wrap.querySelectorAll('[data-set-id]').forEach(b=>{
-    b.onclick = ()=>{
-      const member = state.members.find(m=>m.id === b.dataset.setId);
-      if(member) openStatusModal(member);
-    };
+  wrap.querySelectorAll('.status-select').forEach(sel=>{
+    sel.addEventListener('change', ()=>{
+      const memberId = sel.dataset.setId;
+      const member = state.members.find(m=>m.id === memberId);
+      if(!member) return;
+      if(sel.value === ''){
+        // "لم يُسجَّل" chosen again — remove the existing record for this date if any
+        if(state.attendance[currentDate]) delete state.attendance[currentDate][memberId];
+        queueSave();
+      } else {
+        setAttendance(currentDate, memberId, sel.value);
+      }
+      sel.className = 'status-select ' + (sel.value ? statusClass(sel.value) : '');
+      showToast(sel.value ? `تم تسجيل ${member.name}: ${sel.value}` : `تم إلغاء تسجيل ${member.name}`);
+      renderStatRow();
+      renderSessionMeta();
+    });
   });
 }
 
