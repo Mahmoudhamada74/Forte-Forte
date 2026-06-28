@@ -356,6 +356,7 @@
     <div class="card picker-card">
       <div id="memberSearchStage">
         <div class="session-meta" id="sessionMeta"></div>
+        <div id="memberDateSummary" style="margin-bottom:16px;"></div>
         <div class="search-row">
           <input type="text" id="memberSearch" placeholder="دوّر على اسمك…">
         </div>
@@ -506,6 +507,7 @@ let state = {
 
 const todayISO = () => new Date().toISOString().slice(0,10);
 let currentDate = todayISO();
+let memberViewDate = todayISO();
 let currentRole = 'member';
 let activeGroupFilter = 'الكل';
 let activeMaestroPanel = 'today';
@@ -563,6 +565,7 @@ function queueSave(){
 function renderEverythingSafely(){
   // called on live Firebase updates; re-render whichever view is active without losing user's place
   renderSessionMeta();
+  renderDateSummary();
   renderGroupTabs();
   renderMemberGrid();
   if(currentRole === 'maestro' && isMaestroUnlocked()) renderMaestroAll();
@@ -645,11 +648,60 @@ function groupsList(){
    ============================================================ */
 function renderSessionMeta(){
   const wrap = document.getElementById('sessionMeta');
-  const att = getAttendanceFor(currentDate);
+  const att = getAttendanceFor(memberViewDate);
   const markedCount = Object.keys(att).length;
   wrap.innerHTML = `
-    <div class="pill">📅 <b>${formatDateAr(currentDate)}</b></div>
+    <label class="pill" style="cursor:pointer; position:relative;">
+      📅 <b>${formatDateAr(memberViewDate)}</b>
+      <input type="date" id="memberDatePicker" value="${memberViewDate}"
+        style="position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; height:100%; border:none;">
+    </label>
     <div class="pill">✔️ تم تسجيل <b>${markedCount}</b> من <b>${state.members.length}</b></div>
+  `;
+  document.getElementById('memberDatePicker').addEventListener('change', (e)=>{
+    memberViewDate = e.target.value || todayISO();
+    renderSessionMeta();
+    renderDateSummary();
+    renderMemberGrid();
+  });
+}
+
+function renderDateSummary(){
+  const wrap = document.getElementById('memberDateSummary');
+  const att = getAttendanceFor(memberViewDate);
+  let present = 0, late = 0, absent = 0;
+  Object.values(att).forEach(rec=>{
+    if(rec.status === 'حاضر') present++;
+    else if(rec.status === 'متأخر') late++;
+    else if(rec.status === 'غائب') absent++;
+  });
+  const totalMarked = present + late + absent;
+  const total = state.members.length;
+  const rate = totalMarked ? Math.round((present / totalMarked) * 100) : 0;
+
+  wrap.innerHTML = `
+    <div style="display:grid; grid-template-columns:repeat(5,1fr); gap:6px;">
+      <div class="stat-card" style="padding:8px 4px; text-align:center;">
+        <div class="v" style="font-size:1.15rem; color:var(--ok);">${present}</div>
+        <div class="l" style="font-size:0.56rem;">حاضر</div>
+      </div>
+      <div class="stat-card" style="padding:8px 4px; text-align:center;">
+        <div class="v" style="font-size:1.15rem; color:var(--gold);">${late}</div>
+        <div class="l" style="font-size:0.56rem;">متأخر</div>
+      </div>
+      <div class="stat-card" style="padding:8px 4px; text-align:center;">
+        <div class="v" style="font-size:1.15rem; color:var(--bad);">${absent}</div>
+        <div class="l" style="font-size:0.56rem;">غائب</div>
+      </div>
+      <div class="stat-card" style="padding:8px 4px; text-align:center;">
+        <div class="v" style="font-size:1.15rem;">${rate}%</div>
+        <div class="l" style="font-size:0.56rem;">نسبة الحضور</div>
+      </div>
+      <div class="stat-card" style="padding:8px 4px; text-align:center;">
+        <div class="v" style="font-size:1.15rem; color:var(--gold);">${total}</div>
+        <div class="l" style="font-size:0.56rem;">إجمالي الفريق</div>
+      </div>
+    </div>
   `;
 }
 
@@ -668,7 +720,7 @@ function renderGroupTabs(){
 function renderMemberGrid(){
   const wrap = document.getElementById('memberGrid');
   const search = (document.getElementById('memberSearch').value || '').trim().toLowerCase();
-  const att = getAttendanceFor(currentDate);
+  const att = getAttendanceFor(memberViewDate);
 
   let list = state.members.filter(m=>{
     if(activeGroupFilter !== 'الكل' && m.section !== activeGroupFilter) return false;
@@ -739,10 +791,10 @@ function openPersonalView(member){
     <div style="color:var(--paper-dim); font-size:0.85rem;">${member.sub ? member.sub + ' — ' : ''}${member.section}</div>
   `;
 
-  const todayRec = getAttendanceFor(currentDate)[member.id];
+  const todayRec = getAttendanceFor(memberViewDate)[member.id];
   document.getElementById('personalToday').innerHTML = `
     <div class="pill" style="display:inline-flex; margin-bottom:14px;">
-      📅 <b>${formatDateAr(currentDate)}</b>
+      📅 <b>${formatDateAr(memberViewDate)}</b>
       &nbsp;·&nbsp;
       ${todayRec ? badgeHtml(todayRec.status) : '<span style="color:var(--paper-dim);">لم يُسجَّل بعد</span>'}
     </div>
@@ -1051,6 +1103,7 @@ function bindStaticEvents(){
     document.getElementById('memberView').style.display='block';
     document.getElementById('maestroView').style.display='none';
     renderSessionMeta();
+    renderDateSummary();
     renderGroupTabs();
     renderMemberGrid();
   };
@@ -1236,6 +1289,7 @@ async function init(){
   await loadState();
   bindStaticEvents();
   renderSessionMeta();
+  renderDateSummary();
   renderGroupTabs();
   renderMemberGrid();
 }
